@@ -65,7 +65,7 @@ export async function POST(req: Request) {
               freelancerName,
               projectTitle,
               vercelUrl: outputs.landingPageUrl,
-              dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL}/my-projects`,
+              dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://brief-crew.vercel.app"}/my-projects`,
             })
           );
         }

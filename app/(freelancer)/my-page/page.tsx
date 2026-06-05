@@ -20,7 +20,7 @@ export default function MyPagePage() {
   const [copied, setCopied]     = useState(false);
 
   const currentSlug = userData?.username ?? "";
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://brief-crew.vercel.app";
   const publicUrl = currentSlug ? `${appUrl}/f/${currentSlug}` : null;
 
   const handleSaveSlug = async () => {

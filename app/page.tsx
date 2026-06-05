@@ -31,9 +31,6 @@ function Nav() {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/sign-up" className="text-sm text-neutral-500 hover:text-neutral-900 transition-colors hidden sm:inline">
-            Find a freelancer
-          </Link>
           <Link href="/sign-in" className="text-sm text-neutral-500 hover:text-neutral-900 transition-colors">
             Sign in
           </Link>

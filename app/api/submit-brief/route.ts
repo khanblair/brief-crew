@@ -27,7 +27,7 @@ export async function POST(req: Request) {
     // Fetch freelancer's Telegram to notify them
     // We do a best-effort notification — failure doesn't block the response
     try {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://brief-crew.vercel.app";
       const message =
         `📩 <b>New brief received via BriefCrew</b>\n\n` +
         `<b>From:</b> ${clientName} (${clientCompany})\n` +
