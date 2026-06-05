@@ -10,7 +10,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/submit-brief(.*)",
 ]);
 
-export const proxy = clerkMiddleware(async (auth, req) => {
+export default clerkMiddleware(async (auth, req) => {
   if (isPublicRoute(req)) return NextResponse.next();
 
   const { userId } = await auth();
