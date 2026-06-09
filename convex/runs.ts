@@ -45,6 +45,7 @@ export const saveOutput = mutation({
     agentName: v.union(
       v.literal("research"),
       v.literal("writer"),
+      v.literal("pitchDeck"),
       v.literal("builder"),
       v.literal("proposal")
     ),

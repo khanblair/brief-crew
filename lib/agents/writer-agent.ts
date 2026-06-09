@@ -6,6 +6,16 @@ export interface WriterOutput {
   pitchDeck: string;
 }
 
+// Safely parse JSON from an LLM response that may include prose/fences around it
+function parseJson<T>(raw: string, fallback: T): T {
+  try {
+    const match = raw.match(/[\[{][\s\S]*[\]}]/);
+    return JSON.parse(match?.[0] ?? "null") ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function runWriterAgent(
   ctx: RunContext,
   researchReport: string
@@ -14,7 +24,7 @@ export async function runWriterAgent(
 
   emit({ agent: "Writer Agent", status: "running", message: "Analysing audience from research output..." });
 
-  const audienceAnalysis = await chat([
+  const audienceRaw = await chat([
     {
       role: "system",
       content: "You are a brand strategist. Identify 3 audience segments from the research and brief. Return a brief JSON with keys: primary, secondary, tertiary (each with name and communication_need).",
@@ -25,9 +35,11 @@ export async function runWriterAgent(
     },
   ], { temperature: 0.5 });
 
+  const audience = parseJson<{ primary?: { name: string; communication_need: string }; secondary?: { name: string; communication_need: string }; tertiary?: { name: string; communication_need: string } }>(audienceRaw, {});
+
   emit({ agent: "Writer Agent", status: "running", message: "Generating tagline options..." });
 
-  const taglines = await chat([
+  const taglinesRaw = await chat([
     {
       role: "system",
       content: `You are a brand copywriter for East African markets.
@@ -36,15 +48,16 @@ Be specific to the product and audience. Return JSON array of 3 strings.`,
     },
     {
       role: "user",
-      content: `Product: ${ctx.clientCompany}\nBrief: ${ctx.briefText}\nAudience analysis: ${audienceAnalysis}`,
+      content: `Product: ${ctx.clientCompany}\nBrief: ${ctx.briefText}\nAudience analysis: ${audienceRaw}`,
     },
   ], { temperature: 0.8 });
 
+  const taglines = parseJson<string[]>(taglinesRaw, [taglinesRaw.trim()]);
   emit({ agent: "Writer Agent", status: "complete", message: "3 tagline options generated" });
 
   emit({ agent: "Writer Agent", status: "running", message: "Generating hero copy..." });
 
-  const heroCopy = await chat([
+  const heroRaw = await chat([
     {
       role: "system",
       content: `Brand copywriter for East African markets.
@@ -57,11 +70,12 @@ Return JSON: { headline, subheadline, paragraph }`,
     },
   ], { temperature: 0.7 });
 
+  const hero = parseJson<{ headline?: string; subheadline?: string; paragraph?: string }>(heroRaw, {});
   emit({ agent: "Writer Agent", status: "complete", message: "Hero section complete" });
 
   emit({ agent: "Writer Agent", status: "running", message: "Generating feature descriptions..." });
 
-  const features = await chat([
+  const featuresRaw = await chat([
     {
       role: "system",
       content: "Write 3 feature descriptions at exactly 50 words each in plain language accessible to the primary audience. No jargon. Return JSON array of 3 objects: { title, description }",
@@ -72,6 +86,7 @@ Return JSON: { headline, subheadline, paragraph }`,
     },
   ], { temperature: 0.7 });
 
+  const features = parseJson<{ title: string; description: string }[]>(featuresRaw, []);
   emit({ agent: "Writer Agent", status: "complete", message: "3 feature descriptions complete" });
 
   emit({ agent: "Writer Agent", status: "running", message: "Generating pitch deck outline..." });
@@ -85,14 +100,14 @@ Format as markdown with ## Slide N: [Title] headers.`,
     },
     {
       role: "user",
-      content: `Product: ${ctx.clientCompany}\nBrief: ${ctx.briefText}\nResearch: ${researchReport.slice(0, 3000)}\nAudience: ${audienceAnalysis}`,
+      content: `Product: ${ctx.clientCompany}\nBrief: ${ctx.briefText}\nResearch: ${researchReport.slice(0, 3000)}\nAudience: ${audienceRaw}`,
     },
   ], { temperature: 0.6, maxTokens: 2500 });
 
   const pitchWordCount = pitchDeck.trim().split(/\s+/).length;
   emit({ agent: "Writer Agent", status: "complete", message: `Pitch deck outline complete — ${pitchWordCount} words / 10 slides` });
 
-  const ctas = await chat([
+  const ctasRaw = await chat([
     {
       role: "system",
       content: "Generate primary CTA (max 5 words) and secondary CTA (max 5 words). Return JSON: { primary, secondary }",
@@ -102,6 +117,8 @@ Format as markdown with ## Slide N: [Title] headers.`,
       content: `Product: ${ctx.clientCompany}\nBrief: ${ctx.briefText}`,
     },
   ], { temperature: 0.7 });
+
+  const ctas = parseJson<{ primary?: string; secondary?: string }>(ctasRaw, {});
 
   const bio = await chat([
     {
@@ -114,22 +131,51 @@ Format as markdown with ## Slide N: [Title] headers.`,
     },
   ], { temperature: 0.6 });
 
+  // ── Render brand copy as clean markdown (no raw JSON) ─────────────────────
+
+  const taglinesSection = taglines.length > 0
+    ? taglines.map((t, i) => `${i + 1}. ${t}`).join("\n")
+    : taglinesRaw.trim();
+
+  const heroSection = hero.headline
+    ? `**${hero.headline}**\n\n${hero.subheadline ?? ""}\n\n${hero.paragraph ?? ""}`
+    : heroRaw.trim();
+
+  const featuresSection = features.length > 0
+    ? features.map((f) => `**${f.title}**\n\n${f.description}`).join("\n\n---\n\n")
+    : featuresRaw.trim();
+
+  const ctasSection = ctas.primary
+    ? `- **Primary:** ${ctas.primary}\n- **Secondary:** ${ctas.secondary ?? ""}`
+    : ctasRaw.trim();
+
+  const audienceSection = audience.primary
+    ? [
+        audience.primary   && `- **${audience.primary.name}** — ${audience.primary.communication_need}`,
+        audience.secondary && `- **${audience.secondary.name}** — ${audience.secondary.communication_need}`,
+        audience.tertiary  && `- **${audience.tertiary.name}** — ${audience.tertiary.communication_need}`,
+      ].filter(Boolean).join("\n")
+    : audienceRaw.trim();
+
   const brandCopy = `# Brand Copy — ${ctx.clientCompany}
 
+## Target Audiences
+${audienceSection}
+
 ## Taglines
-${taglines}
+${taglinesSection}
 
 ## Hero Copy
-${heroCopy}
+${heroSection}
 
 ## Feature Descriptions
-${features}
+${featuresSection}
 
 ## Calls to Action
-${ctas}
+${ctasSection}
 
 ## Company Bio
-${bio}
+${bio.trim()}
 `;
 
   const totalWords = brandCopy.split(/\s+/).length;

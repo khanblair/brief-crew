@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { api } from "@/convex/_generated/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -61,6 +62,7 @@ export default function PackageViewPage({ params }: { params: Promise<{ id: stri
   const outputs   = runData?.outputs ?? [];
   const research  = outputs.find((o) => o.agentName === "research")?.outputText ?? "";
   const brandCopy = outputs.find((o) => o.agentName === "writer")?.outputText ?? "";
+  const pitchDeck = outputs.find((o) => o.agentName === "pitchDeck")?.outputText ?? "";
   const proposal  = outputs.find((o) => o.agentName === "proposal")?.outputText ?? "";
   const run       = runData?.run;
 
@@ -68,7 +70,7 @@ export default function PackageViewPage({ params }: { params: Promise<{ id: stri
     research,
     brandCopy,
     landingPage: pkg?.vercelUrl ? `Live URL: ${pkg.vercelUrl}` : "",
-    pitchDeck: brandCopy,
+    pitchDeck,
     proposal,
   };
 
@@ -76,7 +78,7 @@ export default function PackageViewPage({ params }: { params: Promise<{ id: stri
     research:    !!research,
     brandCopy:   !!brandCopy,
     landingPage: !!pkg?.vercelUrl,
-    pitchDeck:   !!brandCopy,
+    pitchDeck:   !!pitchDeck,
     proposal:    !!proposal,
   };
 
@@ -198,7 +200,7 @@ export default function PackageViewPage({ params }: { params: Promise<{ id: stri
             prose-blockquote:border-brand prose-blockquote:text-neutral-600
             prose-code:text-brand prose-code:bg-brand-50 prose-code:px-1 prose-code:rounded
             prose-hr:border-neutral-200">
-            <ReactMarkdown>{docContent[activeDoc]}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{docContent[activeDoc]}</ReactMarkdown>
           </div>
         ) : (
           <div className="text-center py-12">

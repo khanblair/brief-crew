@@ -94,6 +94,16 @@ export async function POST(req: Request) {
             outputText: outputs.brandCopy,
             qualityCheck: "pass",
           }),
+          outputs.pitchDeck && fetchMutation(api.runs.saveOutput, {
+            runId,
+            projectId: pid,
+            agentName: "pitchDeck",
+            startedAt: startMs,
+            completedAt: saveAt,
+            wordCount: outputs.pitchDeck.trim().split(/\s+/).length,
+            outputText: outputs.pitchDeck,
+            qualityCheck: "pass",
+          }),
           outputs.proposal && fetchMutation(api.runs.saveOutput, {
             runId,
             projectId: pid,
