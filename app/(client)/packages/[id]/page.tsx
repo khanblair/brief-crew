@@ -4,6 +4,7 @@ import { useState, use } from "react";
 import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { useUser } from "@clerk/nextjs";
+import ReactMarkdown from "react-markdown";
 import { api } from "@/convex/_generated/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -186,8 +187,18 @@ export default function PackageViewPage({ params }: { params: Promise<{ id: stri
         {activeDoc === "landingPage" ? (
           <LandingPageView vercelUrl={pkg?.vercelUrl} />
         ) : docReady[activeDoc] ? (
-          <div className="prose prose-sm max-w-none text-neutral-700 leading-relaxed text-sm whitespace-pre-wrap">
-            {docContent[activeDoc]}
+          <div className="prose prose-sm prose-neutral max-w-none
+            prose-headings:font-semibold prose-headings:text-neutral-900
+            prose-h1:text-xl prose-h2:text-lg prose-h3:text-base
+            prose-p:text-neutral-700 prose-p:leading-relaxed
+            prose-strong:text-neutral-800 prose-strong:font-semibold
+            prose-ul:text-neutral-700 prose-ol:text-neutral-700
+            prose-li:my-0.5
+            prose-table:text-sm prose-th:bg-neutral-50 prose-th:text-neutral-700
+            prose-blockquote:border-brand prose-blockquote:text-neutral-600
+            prose-code:text-brand prose-code:bg-brand-50 prose-code:px-1 prose-code:rounded
+            prose-hr:border-neutral-200">
+            <ReactMarkdown>{docContent[activeDoc]}</ReactMarkdown>
           </div>
         ) : (
           <div className="text-center py-12">

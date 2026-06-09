@@ -62,14 +62,20 @@ Generate the complete landing page HTML now.`,
     },
   ], { temperature: 0.4, maxTokens: 4096 });
 
-  const lineCount = html.split("\n").length;
+  // Strip markdown code fences the LLM sometimes wraps the HTML in
+  const cleaned = html
+    .replace(/^```html\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+
+  const lineCount = cleaned.split("\n").length;
   emit({ agent: "Builder Agent", status: "complete", message: `HTML generated — ${lineCount} lines` });
 
   emit({ agent: "Builder Agent", status: "running", message: "Validating HTML structure..." });
 
-  const hasViewport = html.includes('name="viewport"');
-  const hasOgTitle = html.includes('og:title') || html.includes('og:description');
-  const validationPassed = hasViewport && html.includes('<!DOCTYPE') && html.includes('</html>');
+  const hasViewport = cleaned.includes('name="viewport"');
+  const validationPassed = hasViewport && cleaned.includes('<!DOCTYPE') && cleaned.includes('</html>');
 
   if (validationPassed) {
     emit({ agent: "Builder Agent", status: "complete", message: "Validation passed — no errors" });
@@ -80,12 +86,12 @@ Generate the complete landing page HTML now.`,
   emit({ agent: "Builder Agent", status: "running", message: "Deploying to Vercel..." });
 
   try {
-    const { url } = await deployToVercel(html, ctx.clientCompany);
+    const { url } = await deployToVercel(cleaned, ctx.clientCompany);
     emit({ agent: "Builder Agent", status: "complete", message: `Live URL: ${url}` });
-    return { html, url };
+    return { html: cleaned, url };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     emit({ agent: "Builder Agent", status: "error", message: `Deployment failed — ${msg}. HTML saved as fallback.` });
-    return { html };
+    return { html: cleaned };
   }
 }
