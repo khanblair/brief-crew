@@ -64,10 +64,15 @@ async function trySend(
   // ── curl path (preferred — no undici connection issues) ──────────────────
   // Payload is passed via stdin (-d @-) so newlines/special chars are safe.
   try {
+    // disable_web_page_preview stops Telegram appending a link preview to messages
+    const payloadWithOptions = JSON.stringify({
+      ...JSON.parse(payload),
+      disable_web_page_preview: true,
+    });
     const out = execSync(
       `curl -s -w "\\n%{http_code}" --max-time 30 -X POST "${url}" ` +
       `-H "Content-Type: application/json" -d @-`,
-      { timeout: 35_000, encoding: "utf8", input: payload }
+      { timeout: 35_000, encoding: "utf8", input: payloadWithOptions }
     );
     const lines  = out.trim().split("\n");
     const status = parseInt(lines[lines.length - 1], 10);
@@ -89,10 +94,14 @@ async function trySend(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 30_000);
 
+    const bodyWithOptions = JSON.stringify({
+      ...JSON.parse(payload),
+      disable_web_page_preview: true,
+    });
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Connection: "close" },
-      body: payload,
+      body: bodyWithOptions,
       signal: controller.signal,
     });
     clearTimeout(timer);
