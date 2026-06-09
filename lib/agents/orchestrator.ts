@@ -43,10 +43,7 @@ export async function runOrchestrator(ctx: RunContext): Promise<AgentOutputs> {
   const m = Math.floor(totalMs / 60000);
   const s = Math.floor((totalMs % 60000) / 1000);
 
-  if (ctx.clientTelegram) {
-    emit({ agent: "Orchestrator", status: "running", message: "Sending Telegram notification to client..." });
-    emit({ agent: "Telegram", status: "complete", message: "Notification delivered to client" });
-  }
+  // Telegram notification is sent by run-crew/route.ts after this function returns
 
   emit({ agent: "Orchestrator", status: "complete", message: `Package complete — total runtime: ${m}m ${s}s` });
 

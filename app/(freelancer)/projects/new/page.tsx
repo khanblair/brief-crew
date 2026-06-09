@@ -88,7 +88,7 @@ export default function NewProjectPage() {
             <Input label="Client Name" placeholder="Full name" value={clientForm.clientName} onChange={(e) => setClientForm((f) => ({ ...f, clientName: e.target.value }))} />
             <Input label="Company Name" placeholder="Client's company or organisation" value={clientForm.clientCompany} onChange={(e) => setClientForm((f) => ({ ...f, clientCompany: e.target.value }))} />
             <Input label="Client Email" type="email" placeholder="client@company.com" value={clientForm.clientEmail} onChange={(e) => setClientForm((f) => ({ ...f, clientEmail: e.target.value }))} />
-            <Input label="Client Telegram (optional)" placeholder="@username — leave blank to skip notification" value={clientForm.clientTelegram} onChange={(e) => setClientForm((f) => ({ ...f, clientTelegram: e.target.value }))} />
+            <Input label="Client Telegram Chat ID (optional)" placeholder="e.g. 5367731807 — leave blank to skip notification" value={clientForm.clientTelegram} onChange={(e) => setClientForm((f) => ({ ...f, clientTelegram: e.target.value.trim() }))} />
             <Button onClick={() => setStep("brief")} disabled={!clientReady} className="mt-2 w-full justify-center">
               Continue to Brief →
             </Button>

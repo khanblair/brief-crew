@@ -10,6 +10,7 @@ export default defineSchema({
     professionalTitle: v.optional(v.string()),
     companyName: v.optional(v.string()),
     telegramUsername: v.optional(v.string()),
+    telegramChatId: v.optional(v.string()),
     onboardingComplete: v.boolean(),
     username: v.optional(v.string()),
   })

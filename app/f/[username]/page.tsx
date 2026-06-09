@@ -42,6 +42,7 @@ export default function PublicBriefPage({ params }: { params: Promise<{ username
     clientName: "",
     clientCompany: "",
     clientEmail: "",
+    clientTelegram: "",
     briefText: "",
   });
   const [prefilled, setPrefilled]   = useState(false);
@@ -53,10 +54,11 @@ export default function PublicBriefPage({ params }: { params: Promise<{ username
   useEffect(() => {
     if (prefilled || !clientData) return;
     setForm((f) => ({
-      clientName:    f.clientName    || clientData.displayName || "",
-      clientCompany: f.clientCompany || clientData.companyName || "",
-      clientEmail:   f.clientEmail   || clientData.email       || "",
-      briefText:     f.briefText,
+      clientName:     f.clientName     || clientData.displayName    || "",
+      clientCompany:  f.clientCompany  || clientData.companyName    || "",
+      clientEmail:    f.clientEmail    || clientData.email          || "",
+      clientTelegram: f.clientTelegram || clientData.telegramChatId || "",
+      briefText:      f.briefText,
     }));
     setPrefilled(true);
   }, [clientData, prefilled]);
@@ -96,14 +98,10 @@ export default function PublicBriefPage({ params }: { params: Promise<{ username
     try {
       const res = await fetch("/api/submit-brief", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(freelancer.telegramUsername
-            ? { "x-freelancer-telegram": freelancer.telegramUsername }
-            : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          clientTelegram: form.clientTelegram || undefined,
           freelancerClerkId: freelancer.clerkId,
           freelancerUsername: username,
         }),
@@ -227,6 +225,19 @@ export default function PublicBriefPage({ params }: { params: Promise<{ username
                 onChange={(e) => setForm((f) => ({ ...f, clientEmail: e.target.value }))}
                 className="input-base"
                 required
+              />
+            </Field>
+
+            <Field
+              label="Telegram Chat ID"
+              hint="Optional — for delivery notification"
+            >
+              <input
+                type="text"
+                placeholder="e.g. 5367731807 — message @userinfobot to find yours"
+                value={form.clientTelegram}
+                onChange={(e) => setForm((f) => ({ ...f, clientTelegram: e.target.value.trim() }))}
+                className="input-base"
               />
             </Field>
           </div>

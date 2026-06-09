@@ -24,7 +24,7 @@ export default function OnboardingPage() {
     displayName: user?.fullName ?? "",
     professionalTitle: "",
     companyName: "",
-    telegramUsername: "",
+    telegramChatId: "",
   });
 
   const handleRoleSelect = (r: Role) => { setRole(r); setStep("profile"); };
@@ -40,7 +40,7 @@ export default function OnboardingPage() {
         displayName: form.displayName,
         professionalTitle: form.professionalTitle || undefined,
         companyName: form.companyName || undefined,
-        telegramUsername: form.telegramUsername || undefined,
+        telegramChatId: form.telegramChatId || undefined,
       });
       router.push(role === "freelancer" ? "/dashboard" : "/my-projects");
     } finally {
@@ -109,10 +109,10 @@ export default function OnboardingPage() {
               />
             )}
             <Input
-              label="Telegram Username (optional)"
-              placeholder="@username"
-              value={form.telegramUsername}
-              onChange={(e) => setForm((f) => ({ ...f, telegramUsername: e.target.value }))}
+              label="Telegram Chat ID (optional)"
+              placeholder="e.g. 5367731807 — message @userinfobot to find yours"
+              value={form.telegramChatId}
+              onChange={(e) => setForm((f) => ({ ...f, telegramChatId: e.target.value.trim() }))}
             />
             <Button onClick={handleSubmit} loading={loading} disabled={!form.displayName} className="mt-2 w-full justify-center">
               Complete Setup

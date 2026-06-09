@@ -16,7 +16,12 @@ export async function deployToVercel(
     .replace(/-+/g, "-")
     .slice(0, 50);
 
-  const body: Record<string, unknown> = {
+  const teamId = process.env.VERCEL_TEAM_ID;
+  const url = teamId
+    ? `https://api.vercel.com/v13/deployments?teamId=${teamId}`
+    : "https://api.vercel.com/v13/deployments";
+
+  const body = {
     name: slug,
     files: [
       {
@@ -29,11 +34,7 @@ export async function deployToVercel(
     target: "production",
   };
 
-  if (process.env.VERCEL_TEAM_ID) {
-    body.teamId = process.env.VERCEL_TEAM_ID;
-  }
-
-  const res = await fetch("https://api.vercel.com/v13/deployments", {
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -48,8 +49,26 @@ export async function deployToVercel(
   }
 
   const data = await res.json();
+  const deployUrl = `https://${data.url}`;
+
+  // Disable SSO/authentication protection so landing pages are publicly accessible
+  if (data.projectId) {
+    try {
+      await fetch(
+        `https://api.vercel.com/v9/projects/${data.projectId}${teamId ? `?teamId=${teamId}` : ""}`,
+        {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ ssoProtection: null }),
+        }
+      );
+    } catch {
+      // Non-fatal — page may require auth but deployment succeeded
+    }
+  }
+
   return {
     deploymentId: data.id,
-    url: `https://${data.url}`,
+    url: deployUrl,
   };
 }

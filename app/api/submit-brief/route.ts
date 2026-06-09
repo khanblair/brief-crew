@@ -1,10 +1,17 @@
-import { fetchMutation } from "convex/nextjs";
+import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { api } from "@/convex/_generated/api";
-import { sendTelegramMessage } from "@/lib/telegram";
+import { sendTelegramMessage, buildFreelancerNotification } from "@/lib/telegram";
 
 export async function POST(req: Request) {
-  const { clientName, clientCompany, clientEmail, briefText, freelancerClerkId, freelancerUsername } =
-    await req.json();
+  const {
+    clientName,
+    clientCompany,
+    clientEmail,
+    clientTelegram,
+    briefText,
+    freelancerClerkId,
+    freelancerUsername,
+  } = await req.json();
 
   if (!clientName || !clientCompany || !clientEmail || !briefText || !freelancerClerkId) {
     return Response.json({ error: "Missing required fields" }, { status: 400 });
@@ -21,28 +28,31 @@ export async function POST(req: Request) {
       clientName,
       clientCompany,
       clientEmail,
+      clientTelegram: clientTelegram || undefined,
       briefText,
     });
 
-    // Fetch freelancer's Telegram to notify them
-    // We do a best-effort notification — failure doesn't block the response
+    // Server-side lookup of freelancer's Telegram — no client header needed
     try {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://brief-crew.vercel.app";
-      const message =
-        `📩 <b>New brief received via BriefCrew</b>\n\n` +
-        `<b>From:</b> ${clientName} (${clientCompany})\n` +
-        `<b>Email:</b> ${clientEmail}\n` +
-        `<b>Brief:</b> ${briefText.slice(0, 300)}${briefText.length > 300 ? "..." : ""}\n\n` +
-        `<a href="${appUrl}/dashboard">Open your dashboard to review and run the crew →</a>`;
+      const freelancer = await fetchQuery(api.users.getTelegramRecipient, {
+        clerkId: freelancerClerkId,
+      });
 
-      // Look up the freelancer's Telegram from the database via a direct Convex query
-      // We pass it as a header hint from the client page if available
-      const telegramUsername = req.headers.get("x-freelancer-telegram");
-      if (telegramUsername) {
-        await sendTelegramMessage(telegramUsername, message);
+      if (freelancer?.chatId) {
+        await sendTelegramMessage(
+          { chatId: freelancer.chatId },
+          buildFreelancerNotification({
+            clientName,
+            clientCompany,
+            clientEmail,
+            briefExcerpt: briefText.slice(0, 300) + (briefText.length > 300 ? "…" : ""),
+            dashboardUrl: `${appUrl}/dashboard`,
+          })
+        );
       }
     } catch {
-      // Telegram notification is best-effort — don't block submission
+      // Telegram notification is best-effort — never block submission
     }
 
     return Response.json({ ok: true });

@@ -31,6 +31,16 @@ export const getByClerkId = query({
   },
 });
 
+export const getByEmail = query({
+  args: { email: v.string() },
+  handler: async (ctx, { email }) => {
+    return ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .unique();
+  },
+});
+
 export const getByUsername = query({
   args: { username: v.string() },
   handler: async (ctx, { username }) => {
@@ -73,6 +83,7 @@ export const updateProfile = mutation({
     professionalTitle: v.optional(v.string()),
     companyName: v.optional(v.string()),
     telegramUsername: v.optional(v.string()),
+    telegramChatId: v.optional(v.string()),
   },
   handler: async (ctx, { clerkId, ...updates }) => {
     const user = await ctx.db
@@ -107,6 +118,34 @@ export const setUsername = mutation({
   },
 });
 
+/** Called from the Telegram webhook once the user sends /start to the bot. */
+export const updateTelegramChatId = mutation({
+  args: { clerkId: v.string(), chatId: v.string() },
+  handler: async (ctx, { clerkId, chatId }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
+      .unique();
+    if (!user) throw new Error("User not found");
+    await ctx.db.patch(user._id, { telegramChatId: chatId });
+  },
+});
+
+/** Returns the minimal Telegram fields needed to send a notification. */
+export const getTelegramRecipient = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, { clerkId }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
+      .unique();
+    if (!user) return null;
+    return {
+      chatId: user.telegramChatId ?? null,
+    };
+  },
+});
+
 export const completeOnboarding = mutation({
   args: {
     clerkId: v.string(),
@@ -115,7 +154,7 @@ export const completeOnboarding = mutation({
     displayName: v.string(),
     professionalTitle: v.optional(v.string()),
     companyName: v.optional(v.string()),
-    telegramUsername: v.optional(v.string()),
+    telegramChatId: v.optional(v.string()),
   },
   handler: async (ctx, { clerkId, email, ...profile }) => {
     const existing = await ctx.db

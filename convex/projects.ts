@@ -53,6 +53,7 @@ export const createFromPublicForm = mutation({
     clientName: v.string(),
     clientCompany: v.string(),
     clientEmail: v.string(),
+    clientTelegram: v.optional(v.string()),
     briefText: v.string(),
   },
   handler: async (ctx, args) => {
@@ -62,6 +63,7 @@ export const createFromPublicForm = mutation({
       clientName: args.clientName,
       clientCompany: args.clientCompany,
       clientEmail: args.clientEmail,
+      clientTelegram: args.clientTelegram,
       briefText: args.briefText,
       status: "brief_submitted",
       createdAt: Date.now(),
