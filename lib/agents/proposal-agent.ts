@@ -3,6 +3,36 @@ import { tavilySearch } from "../tavily";
 import { EAST_AFRICA_RATE_CARD } from "../rate-card";
 import type { RunContext } from "./types";
 
+/** Try to extract an hourly rate range (USD) from Tavily search snippets via LLM */
+async function extractRateFromSnippets(
+  skill: string,
+  snippets: string[]
+): Promise<{ min: number; max: number } | null> {
+  if (!snippets.length) return null;
+  const raw = await chat([
+    {
+      role: "system",
+      content: `You are a compensation data analyst. Extract the hourly rate range in USD for a "${skill}" freelancer in East Africa (Uganda, Kenya, Tanzania, Rwanda) from the snippets below.
+Return ONLY a JSON object: { "min": <number>, "max": <number> }
+If no rate is mentioned or the data is not specific to East Africa, return null.
+Do not guess — return null if unsure.`,
+    },
+    {
+      role: "user",
+      content: snippets.join("\n\n---\n\n"),
+    },
+  ], { temperature: 0.1 });
+
+  try {
+    const match = raw.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(match?.[0] ?? "null");
+    if (parsed && typeof parsed.min === "number" && typeof parsed.max === "number") {
+      return parsed as { min: number; max: number };
+    }
+  } catch { /* fall through */ }
+  return null;
+}
+
 export async function runProposalAgent(
   ctx: RunContext,
   researchReport: string
@@ -15,8 +45,11 @@ export async function runProposalAgent(
     {
       role: "system",
       content: `You are a technical project scoper for East African tech projects.
-Break the project into discrete components. Return JSON array of objects: { component, skill_category, hours_optimistic, hours_realistic, hours_conservative }
-Skill categories must match: ${Object.keys(EAST_AFRICA_RATE_CARD).join(", ")}`,
+Break the project into discrete components based on the brief. Return a JSON array of objects:
+{ component, skill_category, hours_optimistic, hours_realistic, hours_conservative }
+
+Skill categories must exactly match one of: ${Object.keys(EAST_AFRICA_RATE_CARD).join(", ")}
+Tailor the component breakdown to the actual project described — do not use generic components if the brief specifies otherwise.`,
     },
     { role: "user", content: `Brief: ${ctx.briefText}\nResearch context: ${researchReport.slice(0, 1000)}` },
   ], { temperature: 0.3 });
@@ -32,6 +65,7 @@ Skill categories must match: ${Object.keys(EAST_AFRICA_RATE_CARD).join(", ")}`,
     const match = scopeRaw.match(/\[[\s\S]*\]/);
     scope = JSON.parse(match?.[0] ?? "[]");
   } catch {
+    // Fallback stays generic but is clearly labelled as a default
     scope = [
       { component: "Mobile Application", skill_category: "React Native Developer", hours_optimistic: 120, hours_realistic: 160, hours_conservative: 200 },
       { component: "Backend API", skill_category: "Backend API Developer", hours_optimistic: 80, hours_realistic: 120, hours_conservative: 150 },
@@ -42,38 +76,59 @@ Skill categories must match: ${Object.keys(EAST_AFRICA_RATE_CARD).join(", ")}`,
     ];
   }
 
-  emit({ agent: "Proposal Agent", status: "complete", message: `Scope decomposition complete — ${scope.length} components` });
+  emit({ agent: "Proposal Agent", status: "complete", message: `Scope decomposition — ${scope.length} components` });
 
+  // ── Rate research: actually use the Tavily data ──────────────────────────
   const liveRates: Record<string, { min: number; max: number; source: string }> = {};
-
   const uniqueSkills = [...new Set(scope.map((s) => s.skill_category))];
-  for (const skill of uniqueSkills.slice(0, 3)) {
-    const query = `${skill} freelance rate East Africa Uganda Kenya 2025`;
+
+  for (const skill of uniqueSkills) {
+    const query = `"${skill}" freelance hourly rate East Africa Uganda Kenya 2024 2025`;
     const startMs = Date.now();
-    emit({ agent: "Proposal Agent", status: "running", message: `Tavily search: "${query}"` });
+    emit({ agent: "Proposal Agent", status: "running", message: `Rate research: "${skill}"` });
 
     try {
-      const { results } = await tavilySearch(query, { maxResults: 3 });
+      const { results } = await tavilySearch(query, { maxResults: 4 });
       const elapsed = Date.now() - startMs;
-      emit({ agent: "Proposal Agent", status: "complete", message: `Rate data retrieved — East Africa adjustment applied`, elapsed });
 
-      if (results.length > 0) {
+      const snippets = results.map((r) => `${r.title}\n${r.content}`);
+      const extracted = await extractRateFromSnippets(skill, snippets);
+
+      if (extracted) {
+        liveRates[skill] = {
+          min: extracted.min,
+          max: extracted.max,
+          source: results[0]?.url ?? "tavily-search",
+        };
+        emit({
+          agent: "Proposal Agent",
+          status: "complete",
+          message: `Rate found: $${extracted.min}–$${extracted.max}/hr [live data]`,
+          elapsed,
+        });
+      } else {
+        // Tavily returned results but no rate could be extracted — use internal benchmark
         const fallback = EAST_AFRICA_RATE_CARD[skill as keyof typeof EAST_AFRICA_RATE_CARD] ?? { min: 20, max: 40 };
         liveRates[skill] = {
           min: fallback.min,
           max: fallback.max,
-          source: results[0].url,
+          source: "BriefCrew internal benchmark",
         };
+        emit({
+          agent: "Proposal Agent",
+          status: "complete",
+          message: `No live rate found for "${skill}" — using internal benchmark ($${fallback.min}–$${fallback.max}/hr)`,
+          elapsed,
+        });
       }
     } catch {
       const fallback = EAST_AFRICA_RATE_CARD[skill as keyof typeof EAST_AFRICA_RATE_CARD] ?? { min: 20, max: 40 };
-      liveRates[skill] = { min: fallback.min, max: fallback.max, source: "internal-benchmarks" };
+      liveRates[skill] = {
+        min: fallback.min,
+        max: fallback.max,
+        source: "BriefCrew internal benchmark (search failed)",
+      };
     }
-  }
-
-  for (const skill of uniqueSkills.slice(3)) {
-    const rate = EAST_AFRICA_RATE_CARD[skill as keyof typeof EAST_AFRICA_RATE_CARD] ?? { min: 20, max: 40 };
-    liveRates[skill] = { min: rate.min, max: rate.max, source: "internal-benchmarks" };
   }
 
   emit({ agent: "Proposal Agent", status: "running", message: "Calculating budget..." });
@@ -85,7 +140,7 @@ Skill categories must match: ${Object.keys(EAST_AFRICA_RATE_CARD).join(", ")}`,
     const costMax = item.hours_realistic * rate.max;
     totalMin += costMin;
     totalMax += costMax;
-    return { ...item, rateMin: rate.min, rateMax: rate.max, costMin, costMax };
+    return { ...item, rateMin: rate.min, rateMax: rate.max, costMin, costMax, rateSource: liveRates[item.skill_category]?.source ?? "internal" };
   });
 
   const pmOverheadMin = Math.round(totalMin * 0.15);
@@ -99,7 +154,7 @@ Skill categories must match: ${Object.keys(EAST_AFRICA_RATE_CARD).join(", ")}`,
   emit({
     agent: "Proposal Agent",
     status: "complete",
-    message: `Budget calculated — range: $${grandTotalMin.toLocaleString()}–$${grandTotalMax.toLocaleString()}`,
+    message: `Budget: $${grandTotalMin.toLocaleString()}–$${grandTotalMax.toLocaleString()} (midpoint $${midpoint.toLocaleString()})`,
   });
 
   emit({ agent: "Proposal Agent", status: "running", message: "Writing proposal document..." });
@@ -107,9 +162,18 @@ Skill categories must match: ${Object.keys(EAST_AFRICA_RATE_CARD).join(", ")}`,
   const proposal = await chat([
     {
       role: "system",
-      content: `You are a senior business development consultant producing a professional project proposal for an East African client.
-Write a complete proposal document with: Executive Summary, Scope of Work, Recommended Team Structure, Phased Timeline (12-16 weeks), Budget Breakdown (formatted as a markdown table), Payment Milestone Schedule, Terms and Next Steps.
-Be specific, professional, and grounded in the actual project details.`,
+      content: `You are a senior business development consultant producing a professional project proposal.
+Write a complete proposal document with these sections:
+1. Executive Summary
+2. Scope of Work (reference the actual brief details)
+3. Recommended Team Structure
+4. Phased Timeline (weeks, based on realistic hours)
+5. Budget Breakdown (markdown table with columns: Component | Hours | Rate/hr | Cost Range | Rate Source)
+6. Payment Milestone Schedule
+7. Terms & Next Steps
+
+Be specific to the actual project. Do not write generic placeholders.
+In the Budget table, include the Rate Source column so the client can see where rates came from.`,
     },
     {
       role: "user",
@@ -118,8 +182,8 @@ Brief: ${ctx.briefText}
 Prepared by: ${ctx.freelancerName}, ${ctx.freelancerTitle}
 Research context: ${researchReport.slice(0, 1500)}
 
-Budget data:
-${lineItems.map((i) => `- ${i.component} (${i.skill_category}): ${i.hours_realistic}hrs @ $${i.rateMin}–$${i.rateMax}/hr = $${i.costMin.toLocaleString()}–$${i.costMax.toLocaleString()}`).join("\n")}
+Budget data (verified rates):
+${lineItems.map((i) => `- ${i.component} (${i.skill_category}): ${i.hours_realistic}hrs @ $${i.rateMin}–$${i.rateMax}/hr = $${i.costMin.toLocaleString()}–$${i.costMax.toLocaleString()} [${i.rateSource}]`).join("\n")}
 PM overhead (15%): $${pmOverheadMin.toLocaleString()}–$${pmOverheadMax.toLocaleString()}
 Contingency (10%): $${contingencyMin.toLocaleString()}–$${contingencyMax.toLocaleString()}
 TOTAL: $${grandTotalMin.toLocaleString()}–$${grandTotalMax.toLocaleString()}
@@ -130,7 +194,7 @@ Write the full proposal document now.`,
   ], { temperature: 0.4, maxTokens: 3000 });
 
   const wordCount = proposal.trim().split(/\s+/).length;
-  emit({ agent: "Proposal Agent", status: "complete", message: `Proposal document complete — ${wordCount} words` });
+  emit({ agent: "Proposal Agent", status: "complete", message: `Proposal complete — ${wordCount} words` });
 
   return proposal;
 }
